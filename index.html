@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GMV 计算器</title>
+    <script>
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) {
+    module.exports = factory();
+  } else {
+    root.GmvCalculator = factory();
+  }
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  const PRODUCTS = [
+    { id: "earTraining", name: "磨耳朵陪跑", price: 2580 },
+    { id: "phonics", name: "自然拼读", price: 1998 },
+    { id: "rocketCamp", name: "红火箭陪跑营", price: 2880 },
+    { id: "narutoCourse", name: "鸣人专属课", price: 5400 },
+    { id: "morningReading", name: "好好晨读", price: 299 },
+    { id: "primaryCompanion", name: "小学陪跑伴学", price: 399 },
+    { id: "middleCompanion", name: "初中陪跑伴学", price: 499 },
+    { id: "hedgehogEnglish", name: "刺猬英语", price: 2.1 },
+  ];
+
+  function parseAmount(value) {
+    if (value === null || value === undefined) return 0;
+    const normalized = String(value).replace(/[¥,\s]/g, "");
+    if (!normalized) return 0;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function parseQuantity(value) {
+    if (value === null || value === undefined || value === "") {
+      return { quantity: 0, isValid: true };
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+      return { quantity: 0, isValid: false };
+    }
+
+    return { quantity: parsed, isValid: true };
+  }
+
+  function roundMoney(value) {
+    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  function formatCurrency(value) {
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(roundMoney(value));
+  }
+
+  function calculateGmvBreakdown({ totalGmv, quantities }) {
+    const parsedTotal = roundMoney(parseAmount(totalGmv));
+    const safeQuantities = quantities || {};
+    const productRows = PRODUCTS.map((product) => {
+      const parsedQuantity = parseQuantity(safeQuantities[product.id]);
+      const quantity = parsedQuantity.quantity;
+      const amount = roundMoney(quantity * product.price);
+
+      return {
+        ...product,
+        quantity,
+        amount,
+        isQuantityValid: parsedQuantity.isValid,
+      };
+    });
+    const invalidQuantityRows = productRows.filter((row) => !row.isQuantityValid);
+    const knownAmount = roundMoney(
+      productRows.reduce((sum, row) => sum + row.amount, 0),
+    );
+    const remaining = roundMoney(parsedTotal - knownAmount);
+    const isBalanced = remaining >= 0;
+
+    return {
+      totalGmv: parsedTotal,
+      productRows,
+      knownAmount,
+      booksAmount: isBalanced ? remaining : 0,
+      overageAmount: isBalanced ? 0 : Math.abs(remaining),
+      isBalanced,
+      invalidQuantityRows,
+      hasQuantityErrors: invalidQuantityRows.length > 0,
+    };
+  }
+
+  return {
+    PRODUCTS,
+    calculateGmvBreakdown,
+    formatCurrency,
+    parseAmount,
+  };
+});
+
+</script>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --ink: #172033;
+        --muted: #657086;
+        --line: #dce2ea;
+        --line-strong: #bac5d4;
+        --teal: #0f766e;
+        --teal-soft: #e7f5f2;
+        --blue: #1d4ed8;
+        --gold: #b7791f;
+        --red: #b42318;
+        --red-soft: #fff1f0;
+        --shadow: 0 18px 50px rgba(30, 41, 59, 0.12);
+        --radius: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-height: 100%;
+        background: var(--bg);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          linear-gradient(120deg, rgba(15, 118, 110, 0.11), transparent 38%),
+          linear-gradient(210deg, rgba(183, 121, 31, 0.1), transparent 36%),
+          var(--bg);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      .app {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 28px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-end;
+        margin-bottom: 18px;
+      }
+
+      .title h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 44px);
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      .title p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.74);
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: var(--teal);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .panel {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(220, 226, 234, 0.9);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      .input-panel,
+      .summary-panel {
+        padding: 18px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0;
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .ghost-button,
+      .primary-button {
+        min-height: 38px;
+        padding: 0 12px;
+        border-radius: var(--radius);
+        font-weight: 650;
+        white-space: nowrap;
+      }
+
+      .ghost-button {
+        border: 1px solid var(--line);
+        background: #ffffff;
+        color: var(--ink);
+      }
+
+      .primary-button {
+        background: var(--ink);
+        color: #ffffff;
+      }
+
+      .gmv-field {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .gmv-field label {
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .money-input-wrap {
+        position: relative;
+      }
+
+      .money-symbol {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--muted);
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .money-input {
+        width: 100%;
+        min-height: 64px;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        padding: 12px 16px 12px 44px;
+        background: #ffffff;
+        color: var(--ink);
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0;
+        outline: none;
+      }
+
+      .money-input:focus,
+      .quantity-input:focus {
+        border-color: var(--teal);
+        box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+      }
+
+      .product-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .product-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) minmax(96px, 0.36fr);
+        gap: 10px;
+        align-items: center;
+        min-height: 94px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #ffffff;
+      }
+
+      .product-card.active {
+        border-color: rgba(15, 118, 110, 0.52);
+        background: var(--teal-soft);
+      }
+
+      .product-card.invalid {
+        border-color: rgba(180, 35, 24, 0.48);
+        background: var(--red-soft);
+      }
+
+      .product-card input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        accent-color: var(--teal);
+      }
+
+      .product-info {
+        min-width: 0;
+      }
+
+      .product-name {
+        display: block;
+        color: var(--ink);
+        font-weight: 800;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+
+      .product-price {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .quantity-stack {
+        display: grid;
+        gap: 5px;
+      }
+
+      .quantity-stack span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-align: right;
+      }
+
+      .quantity-input {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 8px 10px;
+        background: #ffffff;
+        color: var(--ink);
+        text-align: center;
+        font-size: 20px;
+        font-weight: 800;
+        outline: none;
+      }
+
+      .quantity-input:disabled {
+        background: #f1f4f8;
+        color: #9aa5b5;
+      }
+
+      .product-subtotal {
+        color: var(--blue);
+        font-size: 14px;
+        font-weight: 850;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .product-card.invalid .product-subtotal {
+        color: var(--red);
+      }
+
+      .summary-panel {
+        position: sticky;
+        top: 18px;
+      }
+
+      .summary-total {
+        display: grid;
+        gap: 8px;
+        padding: 16px;
+        border-radius: var(--radius);
+        background: #101827;
+        color: #ffffff;
+      }
+
+      .summary-total span {
+        color: #cbd5e1;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .summary-total strong {
+        font-size: clamp(28px, 5vw, 42px);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 12px 0;
+      }
+
+      .metric {
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #ffffff;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 22px;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .metric.books {
+        border-color: rgba(183, 121, 31, 0.4);
+        background: #fff8eb;
+      }
+
+      .metric.books strong {
+        color: var(--gold);
+      }
+
+      .alert {
+        display: none;
+        margin: 12px 0;
+        padding: 12px;
+        border-radius: var(--radius);
+        border: 1px solid rgba(180, 35, 24, 0.24);
+        background: var(--red-soft);
+        color: var(--red);
+        font-weight: 800;
+        line-height: 1.45;
+      }
+
+      .alert.show {
+        display: block;
+      }
+
+      .result-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .result-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .result-row:last-child {
+        border-bottom: 0;
+      }
+
+      .result-name {
+        min-width: 0;
+      }
+
+      .result-name strong {
+        display: block;
+        overflow-wrap: anywhere;
+      }
+
+      .result-name span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .result-amount {
+        color: var(--blue);
+        font-size: 18px;
+        font-weight: 850;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .books-row .result-amount {
+        color: var(--gold);
+      }
+
+      .copy-status {
+        min-height: 20px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      @media (max-width: 920px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .summary-panel {
+          position: static;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .app {
+          width: min(100% - 20px, 1180px);
+          padding-top: 14px;
+        }
+
+        .topbar {
+          display: grid;
+          align-items: start;
+        }
+
+        .status-pill {
+          width: fit-content;
+        }
+
+        .input-panel,
+        .summary-panel {
+          padding: 12px;
+        }
+
+        .section-head {
+          display: grid;
+          align-items: start;
+        }
+
+        .actions {
+          width: 100%;
+          justify-content: stretch;
+        }
+
+        .ghost-button,
+        .primary-button {
+          flex: 1;
+        }
+
+        .product-grid,
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .money-input {
+          min-height: 58px;
+          font-size: 24px;
+        }
+
+        .product-card {
+          grid-template-columns: auto minmax(0, 1fr);
+          align-items: start;
+        }
+
+        .title h1 {
+          white-space: nowrap;
+        }
+
+        .quantity-stack {
+          grid-column: 1 / -1;
+          grid-template-columns: minmax(0, 1fr) minmax(118px, 0.45fr);
+          gap: 6px 10px;
+          align-items: center;
+        }
+
+        .quantity-stack span {
+          grid-column: 1;
+          text-align: left;
+        }
+
+        .quantity-input {
+          grid-column: 1;
+        }
+
+        .product-subtotal {
+          grid-column: 2;
+          grid-row: 1 / span 2;
+          align-self: center;
+          font-size: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="title">
+          <h1>GMV 计算器</h1>
+          <p>固定商品按单价乘数量，教辅书籍自动吃掉剩余 GMV。</p>
+        </div>
+        <div class="status-pill" aria-label="离线可用">
+          <span class="status-dot" aria-hidden="true"></span>
+          本地离线可用
+        </div>
+      </header>
+
+      <section class="layout">
+        <div class="panel input-panel">
+          <div class="section-head">
+            <h2>输入</h2>
+            <div class="actions">
+              <button class="ghost-button" type="button" id="resetButton">清空</button>
+              <button class="primary-button" type="button" id="copyButton">复制结果</button>
+            </div>
+          </div>
+
+          <div class="gmv-field">
+            <label for="totalGmv">直播总 GMV</label>
+            <div class="money-input-wrap">
+              <span class="money-symbol" aria-hidden="true">¥</span>
+              <input
+                class="money-input"
+                id="totalGmv"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          <div class="product-grid" id="productGrid"></div>
+        </div>
+
+        <aside class="panel summary-panel" aria-live="polite">
+          <div class="section-head">
+            <h2>输出</h2>
+            <span class="status-pill" id="selectedCount">已选 0 类</span>
+          </div>
+
+          <div class="summary-total">
+            <span>直播总 GMV</span>
+            <strong id="totalOutput">¥0.00</strong>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric">
+              <span>固定商品合计</span>
+              <strong id="knownOutput">¥0.00</strong>
+            </div>
+            <div class="metric books">
+              <span>教辅书籍</span>
+              <strong id="booksOutput">¥0.00</strong>
+            </div>
+          </div>
+
+          <div class="alert" id="overageAlert"></div>
+          <div class="result-list" id="resultList"></div>
+          <div class="copy-status" id="copyStatus"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const {
+        PRODUCTS,
+        calculateGmvBreakdown,
+        formatCurrency,
+      } = window.GmvCalculator;
+      const storageKey = "offline-gmv-calculator-state-v1";
+      const totalInput = document.querySelector("#totalGmv");
+      const productGrid = document.querySelector("#productGrid");
+      const totalOutput = document.querySelector("#totalOutput");
+      const knownOutput = document.querySelector("#knownOutput");
+      const booksOutput = document.querySelector("#booksOutput");
+      const selectedCount = document.querySelector("#selectedCount");
+      const overageAlert = document.querySelector("#overageAlert");
+      const resultList = document.querySelector("#resultList");
+      const resetButton = document.querySelector("#resetButton");
+      const copyButton = document.querySelector("#copyButton");
+      const copyStatus = document.querySelector("#copyStatus");
+
+      function loadState() {
+        try {
+          return JSON.parse(localStorage.getItem(storageKey)) || {};
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function saveState(state) {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+      }
+
+      function currentQuantities() {
+        return Object.fromEntries(
+          PRODUCTS.map((product) => {
+            const card = productGrid.querySelector(`[data-product="${product.id}"]`);
+            const checkbox = card.querySelector(".product-toggle");
+            const quantityInput = card.querySelector(".quantity-input");
+            return [product.id, checkbox.checked ? quantityInput.value : 0];
+          }),
+        );
+      }
+
+      function renderProducts(state) {
+        productGrid.innerHTML = PRODUCTS.map((product) => {
+          const savedQuantity = state.quantities?.[product.id] || "";
+          const checked = Number(savedQuantity) > 0;
+
+          return `
+            <label class="product-card ${checked ? "active" : ""}" data-product="${product.id}">
+              <input class="product-toggle" type="checkbox" ${checked ? "checked" : ""} />
+              <span class="product-info">
+                <span class="product-name">${product.name}</span>
+                <span class="product-price">单价 ${formatCurrency(product.price)}</span>
+              </span>
+              <span class="quantity-stack">
+                <span>数量</span>
+                <input
+                  class="quantity-input"
+                  type="number"
+                  inputmode="numeric"
+                  min="0"
+                  step="1"
+                  value="${savedQuantity}"
+                  ${checked ? "" : "disabled"}
+                  aria-label="${product.name}数量"
+                />
+                <strong class="product-subtotal" data-subtotal="${product.id}">¥0.00</strong>
+              </span>
+            </label>
+          `;
+        }).join("");
+      }
+
+      function renderResult() {
+        const quantities = currentQuantities();
+        const result = calculateGmvBreakdown({
+          totalGmv: totalInput.value,
+          quantities,
+        });
+        const selectedRows = result.productRows.filter((row) => row.quantity > 0);
+
+        totalOutput.textContent = formatCurrency(result.totalGmv);
+        knownOutput.textContent = formatCurrency(result.knownAmount);
+        booksOutput.textContent = formatCurrency(result.booksAmount);
+        selectedCount.textContent = `已选 ${selectedRows.length} 类`;
+
+        result.productRows.forEach((row) => {
+          const card = productGrid.querySelector(`[data-product="${row.id}"]`);
+          const subtotal = card.querySelector(".product-subtotal");
+          card.classList.toggle("invalid", !row.isQuantityValid);
+          subtotal.textContent = row.isQuantityValid ? formatCurrency(row.amount) : "数量异常";
+        });
+
+        const alerts = [];
+        if (result.hasQuantityErrors) {
+          const names = result.invalidQuantityRows.map((row) => row.name).join("、");
+          alerts.push(`${names} 的数量必须是 0 或正整数。`);
+        }
+        if (!result.isBalanced) {
+          alerts.push(`固定商品金额已超出总 GMV ${formatCurrency(result.overageAmount)}，请检查数量或总 GMV。`);
+        }
+        overageAlert.classList.toggle("show", alerts.length > 0);
+        overageAlert.textContent = alerts.join(" ");
+
+        const fixedRows = result.productRows.map((row) => `
+          <div class="result-row">
+            <span class="result-name">
+              <strong>${row.name}</strong>
+              <span>${row.isQuantityValid ? `${formatCurrency(row.price)} × ${row.quantity}` : "数量异常，未计入金额"}</span>
+            </span>
+            <span class="result-amount">${row.isQuantityValid ? formatCurrency(row.amount) : "检查数量"}</span>
+          </div>
+        `).join("");
+
+        resultList.innerHTML = `
+          ${fixedRows}
+          <div class="result-row books-row">
+            <span class="result-name">
+              <strong>教辅书籍</strong>
+              <span>总 GMV - 固定商品合计</span>
+            </span>
+            <span class="result-amount">${formatCurrency(result.booksAmount)}</span>
+          </div>
+        `;
+
+        saveState({
+          totalGmv: totalInput.value,
+          quantities,
+        });
+
+        return result;
+      }
+
+      function wireEvents() {
+        totalInput.addEventListener("input", renderResult);
+
+        productGrid.addEventListener("change", (event) => {
+          const card = event.target.closest(".product-card");
+          if (!card) return;
+          const checkbox = card.querySelector(".product-toggle");
+          const quantityInput = card.querySelector(".quantity-input");
+
+          if (event.target.classList.contains("product-toggle")) {
+            quantityInput.disabled = !checkbox.checked;
+            card.classList.toggle("active", checkbox.checked);
+            if (checkbox.checked && !quantityInput.value) {
+              quantityInput.value = "1";
+              quantityInput.focus();
+              quantityInput.select();
+            }
+            if (!checkbox.checked) quantityInput.value = "";
+          }
+
+          renderResult();
+        });
+
+        productGrid.addEventListener("input", (event) => {
+          if (!event.target.classList.contains("quantity-input")) return;
+          const card = event.target.closest(".product-card");
+          const checkbox = card.querySelector(".product-toggle");
+          checkbox.checked = true;
+          card.classList.add("active");
+          renderResult();
+        });
+
+        resetButton.addEventListener("click", () => {
+          totalInput.value = "";
+          productGrid.querySelectorAll(".product-card").forEach((card) => {
+            card.classList.remove("active");
+            card.querySelector(".product-toggle").checked = false;
+            const quantityInput = card.querySelector(".quantity-input");
+            quantityInput.value = "";
+            quantityInput.disabled = true;
+          });
+          copyStatus.textContent = "";
+          renderResult();
+          totalInput.focus();
+        });
+
+        copyButton.addEventListener("click", async () => {
+          const result = renderResult();
+          const lines = [
+            `直播总GMV：${formatCurrency(result.totalGmv)}`,
+            `固定商品合计：${formatCurrency(result.knownAmount)}`,
+            `教辅书籍：${formatCurrency(result.booksAmount)}`,
+            ...result.productRows.map((row) =>
+              row.isQuantityValid
+                ? `${row.name}：${row.quantity}件，${formatCurrency(row.amount)}`
+                : `${row.name}：数量异常，未计入金额`,
+            ),
+          ];
+
+          if (result.hasQuantityErrors) {
+            const names = result.invalidQuantityRows.map((row) => row.name).join("、");
+            lines.push(`异常：${names} 的数量必须是 0 或正整数`);
+          }
+
+          if (!result.isBalanced) {
+            lines.push(`异常：固定商品超出总GMV ${formatCurrency(result.overageAmount)}`);
+          }
+
+          try {
+            await navigator.clipboard.writeText(lines.join("\n"));
+            copyStatus.textContent = "结果已复制。";
+          } catch (error) {
+            const textArea = document.createElement("textarea");
+            textArea.value = lines.join("\n");
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            textArea.remove();
+            copyStatus.textContent = "结果已复制。";
+          }
+        });
+      }
+
+      const initialState = loadState();
+      totalInput.value = initialState.totalGmv || "";
+      renderProducts(initialState);
+      wireEvents();
+      renderResult();
+    </script>
+  </body>
+</html>
