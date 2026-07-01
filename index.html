@@ -320,6 +320,7 @@
         border: 1px solid var(--line);
         border-radius: var(--radius);
         background: #ffffff;
+        cursor: pointer;
       }
 
       .product-card.active {
@@ -336,6 +337,7 @@
         width: 22px;
         height: 22px;
         accent-color: var(--teal);
+        cursor: pointer;
       }
 
       .product-info {
@@ -382,6 +384,7 @@
         font-size: 20px;
         font-weight: 800;
         outline: none;
+        cursor: text;
       }
 
       .quantity-input:disabled {
@@ -743,8 +746,8 @@
           const checked = Number(savedQuantity) > 0;
 
           return `
-            <label class="product-card ${checked ? "active" : ""}" data-product="${product.id}">
-              <input class="product-toggle" type="checkbox" ${checked ? "checked" : ""} />
+            <div class="product-card ${checked ? "active" : ""}" data-product="${product.id}">
+              <input class="product-toggle" type="checkbox" aria-label="${product.name}" ${checked ? "checked" : ""} />
               <span class="product-info">
                 <span class="product-name">${product.name}</span>
                 <span class="product-price">单价 ${formatCurrency(product.price)}</span>
@@ -757,13 +760,13 @@
                   inputmode="numeric"
                   min="0"
                   step="1"
+                  placeholder="0"
                   value="${savedQuantity}"
-                  ${checked ? "" : "disabled"}
                   aria-label="${product.name}数量"
                 />
                 <strong class="product-subtotal" data-subtotal="${product.id}">¥0.00</strong>
               </span>
-            </label>
+            </div>
           `;
         }).join("");
       }
@@ -831,6 +834,23 @@
       function wireEvents() {
         totalInput.addEventListener("input", renderResult);
 
+        productGrid.addEventListener("click", (event) => {
+          if (event.target.closest(".product-toggle") || event.target.closest(".quantity-input")) return;
+          const card = event.target.closest(".product-card");
+          if (!card) return;
+          const checkbox = card.querySelector(".product-toggle");
+          const quantityInput = card.querySelector(".quantity-input");
+          checkbox.checked = !checkbox.checked;
+          card.classList.toggle("active", checkbox.checked);
+          if (checkbox.checked && !quantityInput.value) {
+            quantityInput.value = "1";
+          }
+          if (!checkbox.checked) {
+            quantityInput.value = "";
+          }
+          renderResult();
+        });
+
         productGrid.addEventListener("change", (event) => {
           const card = event.target.closest(".product-card");
           if (!card) return;
@@ -838,7 +858,6 @@
           const quantityInput = card.querySelector(".quantity-input");
 
           if (event.target.classList.contains("product-toggle")) {
-            quantityInput.disabled = !checkbox.checked;
             card.classList.toggle("active", checkbox.checked);
             if (checkbox.checked && !quantityInput.value) {
               quantityInput.value = "1";
@@ -855,8 +874,8 @@
           if (!event.target.classList.contains("quantity-input")) return;
           const card = event.target.closest(".product-card");
           const checkbox = card.querySelector(".product-toggle");
-          checkbox.checked = true;
-          card.classList.add("active");
+          checkbox.checked = event.target.value.trim() !== "";
+          card.classList.toggle("active", checkbox.checked);
           renderResult();
         });
 
@@ -867,7 +886,6 @@
             card.querySelector(".product-toggle").checked = false;
             const quantityInput = card.querySelector(".quantity-input");
             quantityInput.value = "";
-            quantityInput.disabled = true;
           });
           copyStatus.textContent = "";
           renderResult();
